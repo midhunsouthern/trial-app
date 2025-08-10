@@ -13,11 +13,26 @@
     th { background: #fafafa; }
     input, button { padding: 8px; border: 1px solid #ccc; border-radius: 8px; }
     button { cursor: pointer; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .muted { color:#666; font-size: 14px; }
+    .hidden { display:none; }
   </style>
 </head>
 <body>
   <h1>Stock App Trial</h1>
-  <p>Live test connected to Supabase.</p>
+  <p class="muted">Live test connected to Supabase.</p>
+
+  <!-- Auth card -->
+  <div class="card" id="auth-card">
+    <h3>Login</h3>
+    <div class="row">
+      <input id="email" type="email" placeholder="you@example.com" style="min-width:260px;" />
+      <button id="loginBtn">Send login link</button>
+      <button id="logoutBtn" class="hidden">Sign out</button>
+    </div>
+    <p id="authMsg" class="muted"></p>
+    <p id="whoami" class="muted"></p>
+  </div>
 
   <div class="card">
     <h3>Items</h3>
@@ -31,9 +46,9 @@
     </table>
   </div>
 
-  <div class="card">
-    <h3>Add Item</h3>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+  <div class="card" id="add-card">
+    <h3>Add Item (requires login)</h3>
+    <div class="row">
       <input id="sku" placeholder="SKU (unique)" />
       <input id="name" placeholder="Name" style="min-width:260px;" />
       <input id="uom" placeholder="UOM" value="nos" />
@@ -41,18 +56,67 @@
       <input id="qty" placeholder="Qty" type="number" step="1" />
       <button id="addBtn">Add</button>
     </div>
-    <p id="msg"></p>
+    <p id="msg" class="muted"></p>
   </div>
 
   <!-- Supabase client CDN -->
   <script src="https://unpkg.com/@supabase/supabase-js@2.43.4/dist/umd/supabase.js"></script>
   <script>
-    // ⬇️ Replace with your own values from Supabase → Settings → API
+    // Your Supabase project
     const SUPABASE_URL = "https://yqhqgazjeickimatlhzj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxaHFnYXpqZWlja2ltYXRsaHpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3OTY2ODQsImV4cCI6MjA3MDM3MjY4NH0.HtIpN0YYT24DrEgpBUyEg-V6vkn3_tlqy9DZfScgjt8";
 
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // ---- UI helpers
+    function show(el, yes=true){ el.classList.toggle('hidden', !yes); }
+
+    async function refreshAuthUI() {
+      const { data: { session } } = await client.auth.getSession();
+      const user = session?.user || null;
+
+      const whoami = document.getElementById('whoami');
+      const loginBtn = document.getElementById('loginBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const emailInput = document.getElementById('email');
+      const addCard = document.getElementById('add-card');
+
+      if (user) {
+        whoami.textContent = `Signed in as: ${user.email}`;
+        show(loginBtn, false);
+        show(emailInput, false);
+        show(logoutBtn, true);
+        show(addCard, true);
+      } else {
+        whoami.textContent = 'Not signed in.';
+        show(loginBtn, true);
+        show(emailInput, true);
+        show(logoutBtn, false);
+        show(addCard, false);
+      }
+    }
+
+    // ---- Auth actions
+    async function sendLoginLink() {
+      const msg = document.getElementById('authMsg');
+      const email = document.getElementById('email').value.trim();
+      if (!email) { msg.textContent = 'Enter your email.'; return; }
+      msg.textContent = 'Sending login link…';
+      const { error } = await client.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin }
+      });
+      msg.textContent = error ? ('Error: ' + error.message) : 'Check your email for the login link.';
+    }
+
+    async function signOut() {
+      const msg = document.getElementById('authMsg');
+      await client.auth.signOut();
+      msg.textContent = 'Signed out.';
+      await refreshAuthUI();
+    }
+
+    // ---- Data
     async function loadItems() {
       const tbody = document.getElementById('items-body');
       tbody.innerHTML = '<tr><td colspan="6">Loading…</td></tr>';
@@ -96,7 +160,17 @@
       await loadItems();
     }
 
+    // Bind events
+    document.getElementById('loginBtn').addEventListener('click', sendLoginLink);
+    document.getElementById('logoutBtn').addEventListener('click', signOut);
     document.getElementById('addBtn').addEventListener('click', addItem);
+
+    // React to auth changes and load data
+    client.auth.onAuthStateChange((_event, _session) => {
+      refreshAuthUI();
+    });
+
+    refreshAuthUI();
     loadItems();
   </script>
 </body>
