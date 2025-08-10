@@ -1,10 +1,103 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Stock App Trial</title>
+  <meta charset="utf-8" />
+  <title>Stock App Trial</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; max-width: 900px; margin: auto; }
+    h1 { margin: 0 0 12px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+    th { background: #fafafa; }
+    input, button { padding: 8px; border: 1px solid #ccc; border-radius: 8px; }
+    button { cursor: pointer; }
+  </style>
 </head>
 <body>
-    <h1>Hello Southern Coil from My Stock App</h1>
-    <p>This is my very first live page on Vercel!</p>
+  <h1>Stock App Trial</h1>
+  <p>Live test connected to Supabase.</p>
+
+  <div class="card">
+    <h3>Items</h3>
+    <table>
+      <thead>
+        <tr><th>SKU</th><th>Name</th><th>UOM</th><th>Min</th><th>Qty</th><th>Updated</th></tr>
+      </thead>
+      <tbody id="items-body">
+        <tr><td colspan="6">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Add Item</h3>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <input id="sku" placeholder="SKU (unique)" />
+      <input id="name" placeholder="Name" style="min-width:260px;" />
+      <input id="uom" placeholder="UOM" value="nos" />
+      <input id="min_stock" placeholder="Min" type="number" step="1" />
+      <input id="qty" placeholder="Qty" type="number" step="1" />
+      <button id="addBtn">Add</button>
+    </div>
+    <p id="msg"></p>
+  </div>
+
+  <!-- Supabase client CDN -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2.43.4/dist/umd/supabase.js"></script>
+  <script>
+    // ⬇️ Replace with your own values from Supabase → Settings → API
+    const SUPABASE_URL = https://yqhqgazjeickimatlhzj.supabase.co;
+    const SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxaHFnYXpqZWlja2ltYXRsaHpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3OTY2ODQsImV4cCI6MjA3MDM3MjY4NH0.HtIpN0YYT24DrEgpBUyEg-V6vkn3_tlqy9DZfScgjt8;
+
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function loadItems() {
+      const tbody = document.getElementById('items-body');
+      tbody.innerHTML = '<tr><td colspan="6">Loading…</td></tr>';
+      const { data, error } = await client.from('items').select('*').order('updated_at', { ascending:false });
+      if (error) {
+        tbody.innerHTML = `<tr><td colspan="6">Error: ${error.message}</td></tr>`;
+        return;
+      }
+      if (!data || data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6">No items yet.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = data.map(r => `
+        <tr>
+          <td>${r.sku}</td>
+          <td>${r.name}</td>
+          <td>${r.uom ?? ''}</td>
+          <td>${r.min_stock ?? ''}</td>
+          <td>${r.qty ?? ''}</td>
+          <td>${new Date(r.updated_at).toLocaleString()}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function addItem() {
+      const msg = document.getElementById('msg');
+      msg.textContent = 'Saving…';
+      const sku = document.getElementById('sku').value.trim();
+      const name = document.getElementById('name').value.trim();
+      const uom = document.getElementById('uom').value.trim() || 'nos';
+      const min_stock = Number(document.getElementById('min_stock').value || 0);
+      const qty = Number(document.getElementById('qty').value || 0);
+      if (!sku || !name) { msg.textContent = 'SKU and Name are required.'; return; }
+
+      const { error } = await client.from('items').insert([{ sku, name, uom, min_stock, qty }]);
+      if (error) { msg.textContent = 'Error: ' + error.message; return; }
+      msg.textContent = 'Added!';
+      document.getElementById('sku').value = '';
+      document.getElementById('name').value = '';
+      document.getElementById('qty').value = '';
+      await loadItems();
+    }
+
+    document.getElementById('addBtn').addEventListener('click', addItem);
+    loadItems();
+  </script>
 </body>
 </html>
